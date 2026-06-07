@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 import typer
 from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
-
+from tabulate import tabulate
 
 DEFAULT_REPOSITORY = "oss2026hnu/reposcore-py"
 
@@ -94,10 +94,8 @@ def main(
             print(f"오류 ({repo}): {error}", file=sys.stderr)
             raise typer.Exit(1) from error
 
-        typer.echo(f"Repository: {data['nameWithOwner']}")
-        typer.echo(f"Issues: {data['issues']['totalCount']}")
-        typer.echo(f"Pull Requests: {data['pullRequests']['totalCount']}")
-
+        table = [[data['nameWithOwner'], data['issues']['totalCount'], data['pullRequests']['totalCount']]]
+        typer.echo(tabulate(table, headers=["repo", "issues", "pull_requests"]))
 
 def cli() -> None:
     app()
