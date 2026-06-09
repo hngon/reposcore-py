@@ -19,4 +19,8 @@ dependencies = [
 reposcore = "main:cli"
 
 [tool.hatch.build.targets.wheel]
-only-include = ["main.py", "calc_score.py"]
+only-include = [
+  "main.py",
+  "output_writer.py",
+  "calc_score.py",
+ ]
