@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime, timezone
 
 import os
 import sys
@@ -103,7 +104,21 @@ def main(
                         c.model_dump() if hasattr(c, "model_dump") else vars(c)
                         for c in contributions
                     ]
-                    save_cache(cache_path, {"contributions": dumped})
+                    save_cache(
+                        cache_path,
+                        {
+                            "metadata": {
+                                "repository": repo,
+                                "owner": owner,
+                                "name": repo_name,
+                                "schemaVersion": 1,
+                                "generatedAt": datetime.now(timezone.utc)
+                                .isoformat(timespec="seconds")
+                                .replace("+00:00", "Z"),
+                            },
+                            "contributions": dumped,
+                        },
+                    )
             all_contributions.append(contributions)
 
         except ValueError as error:
