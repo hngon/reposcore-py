@@ -19,7 +19,6 @@ DEFAULT_REPOSITORY = "oss2026hnu/reposcore-py"
 app = typer.Typer(help="reposcore-py CLI")
 
 
-
 # --format 옵션을 csv, txt, html로 제한하기 위한 Enum 클래스 정의
 class OutputFormatOption(str, Enum):
     csv = "csv"
@@ -139,10 +138,11 @@ def main(
             # output_writer가 100% 호환되도록 중첩 딕셔너리 구조로 직접 매핑 변환
             aggregated_results = []
             for score in total_scores:
+                contrib = score.contribution
                 aggregated_results.append({
-                    "nameWithOwner": score.user,
-                    "issues": {"totalCount": score.feature_bug_issue_count + score.doc_issue_count},
-                    "pullRequests": {"totalCount": score.feature_bug_pr_count + score.doc_pr_count + score.typo_pr_count},
+                    "nameWithOwner": contrib.user,
+                    "issues": {"totalCount": contrib.feature_bug_issue_count + contrib.doc_issue_count},
+                    "pullRequests": {"totalCount": contrib.feature_bug_pr_count + contrib.doc_pr_count + contrib.typo_pr_count},
                     "totalScore": score.score
                 })
             content = build_output(aggregated_results, format_value)

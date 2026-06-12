@@ -34,23 +34,30 @@ def get_pull_request_count(result: dict[str, Any]) -> int:
 
 
 def build_txt_output(results: list[dict[str, Any]]) -> str:
+    has_score = any("totalScore" in result for result in results)
+    
+    headers = ["repo", "issues", "pull_requests"] + (["total_score"] if has_score else [])
+
     rows = [
         [
             get_repository_name(result),
             get_issue_count(result),
             get_pull_request_count(result),
-        ]
+        ] + ([result.get("totalScore", 0)] if has_score else [])
         for result in results
     ]
 
-    return tabulate(rows, headers=["repo", "issues", "pull_requests"])
+    return tabulate(rows, headers=headers)
 
 
 def build_csv_output(results: list[dict[str, Any]]) -> str:
+    has_score = any("totalScore" in result for result in results)
+    
     output = StringIO()
     writer = csv.writer(output)
 
-    writer.writerow(["repo", "issues", "pull_requests"])
+    headers = ["repo", "issues", "pull_requests"] + (["total_score"] if has_score else [])
+    writer.writerow(headers)
 
     for result in results:
         writer.writerow(
@@ -58,23 +65,35 @@ def build_csv_output(results: list[dict[str, Any]]) -> str:
                 get_repository_name(result),
                 get_issue_count(result),
                 get_pull_request_count(result),
-            ]
+            ] + ([result.get("totalScore", 0)] if has_score else [])
         )
 
     return output.getvalue().strip()
 
 
 def build_html_output(results: list[dict[str, Any]]) -> str:
-    rows = "\n".join(
-        [
+    # 1. 데이터셋에 totalScore가 존재하는지 확인
+    has_score = any("totalScore" in result for result in results)
+    
+    # 2. 점수가 있을 때만 HTML th 태그를 동적으로 생성
+    th_score = "\n        <th>total_score</th>" if has_score else ""
+
+    html_rows = []
+    for result in results:
+        row = (
             "      <tr>"
             f"<td>{escape(get_repository_name(result))}</td>"
             f"<td>{get_issue_count(result)}</td>"
             f"<td>{get_pull_request_count(result)}</td>"
-            "</tr>"
-            for result in results
-        ]
-    )
+        )
+        # 점수가 있을 때만 안전하게 td 태그를 더해줍니다.
+        if has_score:
+            row += f"<td>{result.get('totalScore', 0)}</td>"
+        
+        row += "</tr>"
+        html_rows.append(row)
+
+    rows = "\n".join(html_rows)
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -88,7 +107,7 @@ def build_html_output(results: list[dict[str, Any]]) -> str:
       <tr>
         <th>repo</th>
         <th>issues</th>
-        <th>pull_requests</th>
+        <th>pull_requests</th>{th_score}
       </tr>
     </thead>
     <tbody>
