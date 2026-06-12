@@ -4,7 +4,6 @@ import os
 import sys
 from enum import Enum
 from importlib.metadata import version, PackageNotFoundError
-from typing import Annotated
 from pathlib import Path
 from typing import Annotated
 
@@ -62,6 +61,7 @@ def _load_or_fetch_contributions(
     repos: list[str],
     token: str,
     output: str | None,
+    no_cache: bool = False,
 ) -> list[list[UserContributionCounts]]:
     all_contributions: list[list[UserContributionCounts]] = [[] for _ in repos]
     cache_paths: list[Path | None] = []
@@ -72,7 +72,8 @@ def _load_or_fetch_contributions(
         owner, repo_name = split_repository(repo)
         cache_path = None
 
-        if output:
+        # --no-cache 가 지정되면 캐시 경로를 만들지 않아 읽기/쓰기 모두 건너뜁니다.
+        if not no_cache and output:
             cache_path = Path(output) / f"{owner}_{repo_name}" / "cache.json"
 
         cache_paths.append(cache_path)
@@ -148,6 +149,10 @@ def main(
         bool,
         typer.Option("--aggregate", help="여러 저장소의 결과를 하나로 합산하여 전체 기여 점수를 출력합니다."),
     ] = False,
+    no_cache: Annotated[
+        bool,
+        typer.Option("--no-cache", help="캐시를 사용하지 않고 GitHub API에서 최신 데이터를 다시 조회합니다."),
+    ] = False,
 ) -> None:
     """Fetch basic repository counts from GitHub GraphQL API."""
 
@@ -165,6 +170,7 @@ def main(
             repos,
             resolved_token,
             output,
+            no_cache,
         )
 
     except ValueError as error:
