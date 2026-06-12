@@ -13,6 +13,7 @@ update-synopsis.py — CLI 도움말을 캡처하여 최상위 README.md를 생�
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -30,6 +31,8 @@ def capture_cli_help() -> str:
     ]
 
     last_error = ""
+    env = os.environ.copy()
+    env["COLUMNS"] = "80"
 
     for command in candidates:
         try:
@@ -38,6 +41,7 @@ def capture_cli_help() -> str:
                 cwd=ROOT,
                 capture_output=True,
                 text=True,
+                env=env,
             )
         except FileNotFoundError as error:
             last_error = f"{command[0]} 명령을 찾을 수 없습니다: {error}"
@@ -58,9 +62,11 @@ def normalize(help_text: str) -> str:
         index = help_text.find(marker)
 
         if index != -1:
-            return help_text[index:].strip()
+            normalized = help_text[index:].strip()
+            return "\n".join(line.rstrip() for line in normalized.splitlines())
 
-    return help_text.strip()
+    normalized = help_text.strip()
+    return "\n".join(line.rstrip() for line in normalized.splitlines())
 
 
 def render_readme(synopsis: str) -> str:
@@ -73,7 +79,7 @@ def render_readme(synopsis: str) -> str:
     if placeholder not in template:
         raise RuntimeError(f"README-template.md에 {placeholder} 플레이스홀더가 없습니다.")
 
-    return template.replace(placeholder, synopsis)
+    return template.replace(placeholder, synopsis).rstrip() + "\n"
 
 
 def main() -> None:
