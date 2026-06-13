@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
 from pydantic import BaseModel
@@ -29,6 +30,8 @@ class PageInfo(BaseModel):
 class Node(BaseModel):
     author: Author | None
     labels: LabelConnection
+    createdAt: str | None = None
+    mergedAt: str | None = None
 
 
 class Connection(BaseModel):
@@ -65,6 +68,29 @@ def create_client(token: str) -> Client:
     return Client(transport=transport, fetch_schema_from_transport=False)
 
 
+# ── 날짜 필터링 유틸리티 ─────────────────────────────────────────
+
+def _is_in_date_range(
+    date_str: str | None,
+    since: date | None,
+    until: date | None,
+) -> bool:
+    if date_str is None:
+        return True
+
+    try:
+        item_date = date.fromisoformat(date_str[:10])
+    except ValueError:
+        return True
+
+    if since is not None and item_date < since:
+        return False
+    if until is not None and item_date > until:
+        return False
+
+    return True
+
+
 # ── 공통 기여 집계 유틸리티 ─────────────────────────────────────
 
 
@@ -90,8 +116,13 @@ def _get_contribution(
 def _add_issue_contribution(
     contributions: dict[str, UserContributionCounts],
     node: Node,
+    since: date | None = None,
+    until: date | None = None,
 ) -> None:
     if node.author is None:
+        return
+    
+    if not _is_in_date_range(node.createdAt, since, until):
         return
 
     contribution = _get_contribution(contributions, node.author.login)
@@ -106,8 +137,13 @@ def _add_issue_contribution(
 def _add_pr_contribution(
     contributions: dict[str, UserContributionCounts],
     node: Node,
+    since: date | None = None,
+    until: date | None = None,
 ) -> None:
     if node.author is None:
+        return
+
+    if not _is_in_date_range(node.mergedAt, since, until):
         return
 
     contribution = _get_contribution(contributions, node.author.login)
@@ -143,6 +179,7 @@ def _build_issue_alias_query(indexes: list[int]):
                     }}
                     nodes {{
                         author {{ login }}
+                        createdAt
                         labels(first: 10) {{
                             nodes {{ name }}
                         }}
@@ -183,6 +220,7 @@ def _build_pr_alias_query(indexes: list[int]):
                     }}
                     nodes {{
                         author {{ login }}
+                        mergedAt
                         labels(first: 10) {{
                             nodes {{ name }}
                         }}
@@ -203,8 +241,12 @@ def _build_pr_alias_query(indexes: list[int]):
 
 # ── 기여 데이터 수집 ──────────────────────────────────────────────
 
-
-def fetch_contributions(repository: str, token: str) -> list[UserContributionCounts]:
+def fetch_contributions(
+    repository: str,
+    token: str,
+    since: date | None = None,
+    until: date | None = None,
+) -> list[UserContributionCounts]:
     owner, name = _split_repository(repository)
     client = create_client(token)
     contributions: dict[str, UserContributionCounts] = {}
@@ -220,6 +262,7 @@ def fetch_contributions(repository: str, token: str) -> list[UserContributionCou
                 }
                 nodes {
                     author { login }
+                    createdAt
                     labels(first: 10) {
                         nodes { name }
                     }
@@ -244,7 +287,7 @@ def fetch_contributions(repository: str, token: str) -> list[UserContributionCou
         issues = Connection.model_validate(result["repository"]["issues"])
 
         for node in issues.nodes:
-            _add_issue_contribution(contributions, node)
+            _add_issue_contribution(contributions, node, since, until)
 
         if not issues.pageInfo.hasNextPage:
             break
@@ -261,6 +304,7 @@ def fetch_contributions(repository: str, token: str) -> list[UserContributionCou
                 }
                 nodes {
                     author { login }
+                    mergedAt
                     labels(first: 10) {
                         nodes { name }
                     }
@@ -285,7 +329,7 @@ def fetch_contributions(repository: str, token: str) -> list[UserContributionCou
         prs = Connection.model_validate(result["repository"]["pullRequests"])
 
         for node in prs.nodes:
-            _add_pr_contribution(contributions, node)
+            _add_pr_contribution(contributions, node, since, until)
 
         if not prs.pageInfo.hasNextPage:
             break
@@ -297,6 +341,8 @@ def fetch_contributions(repository: str, token: str) -> list[UserContributionCou
 def fetch_multiple_contributions(
     repositories: list[str],
     token: str,
+    since: date | None = None,
+    until: date | None = None,
 ) -> list[list[UserContributionCounts]]:
     """여러 저장소의 기여 데이터를 GraphQL repository alias를 사용해 조회합니다."""
 
@@ -341,6 +387,8 @@ def fetch_multiple_contributions(
                     _add_issue_contribution(
                         contributions_by_repository[index],
                         node,
+                        since,
+                        until,
                     )
 
                 if issues.pageInfo.hasNextPage:
@@ -370,6 +418,8 @@ def fetch_multiple_contributions(
                     _add_pr_contribution(
                         contributions_by_repository[index],
                         node,
+                        since,
+                        until,
                     )
 
                 if prs.pageInfo.hasNextPage:
