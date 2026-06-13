@@ -14,6 +14,7 @@ update-synopsis.py — CLI 도움말을 캡처하여 최상위 README.md를 생�
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -32,7 +33,7 @@ def capture_cli_help() -> str:
 
     last_error = ""
     env = os.environ.copy()
-    env["COLUMNS"] = "80"
+    env["COLUMNS"] = "100"
 
     for command in candidates:
         try:
@@ -58,15 +59,23 @@ def capture_cli_help() -> str:
 
 
 def normalize(help_text: str) -> str:
+    # 터미널 박스 문자(Rich) 제거 (GitHub Markdown에서의 한글 너비 정렬 깨짐 방지)
+    help_text = re.sub(r'^╭─\s*(.*?)\s*─*╮$', r'\1', help_text, flags=re.MULTILINE)
+    help_text = re.sub(r'^╰─*╯$', '', help_text, flags=re.MULTILINE)
+    help_text = re.sub(r'^│', ' ', help_text, flags=re.MULTILINE)
+    help_text = re.sub(r'\s*│$', '', help_text, flags=re.MULTILINE)
+
     for marker in ["Usage:", "usage:"]:
         index = help_text.find(marker)
 
         if index != -1:
             normalized = help_text[index:].strip()
-            return "\n".join(line.rstrip() for line in normalized.splitlines())
+            result = "\n".join(line.rstrip() for line in normalized.splitlines())
+            return re.sub(r'\n{3,}', '\n\n', result)
 
     normalized = help_text.strip()
-    return "\n".join(line.rstrip() for line in normalized.splitlines())
+    result = "\n".join(line.rstrip() for line in normalized.splitlines())
+    return re.sub(r'\n{3,}', '\n\n', result)
 
 
 def render_readme(synopsis: str) -> str:
