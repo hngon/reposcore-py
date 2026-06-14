@@ -15,7 +15,7 @@ reposcore oss2026hnu/reposcore-py
 ### 2. 여러 저장소 조회
 공백으로 구분하여 여러 저장소 경로를 입력하면, 각 저장소의 결과를 한 번에 조회할 수 있습니다.
 ```bash
-reposcore oss2026hnu/reposcore-py oss2026hnu/reposcore-cs
+reposcore oss2026hnu/reposcore-py oss2026hnu/reposcore-cs oss2026hnu/reposcore-ts
 ```
 
 ### 3. `--format` 옵션을 사용한 출력 형식 지정
