@@ -272,3 +272,34 @@ def test_pagination(monkeypatch: pytest.MonkeyPatch):
     assert contribs_by_user["user1"].typo_pr_count == 1
 
     assert contribs_by_user["user2"].feature_bug_pr_count == 1
+
+
+def test_unknown_and_unlabeled_items_do_not_create_zero_count_users(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def mock_execute(query, variable_values):
+        query_str = str(query)
+        if "issues(" in query_str:
+            return make_issue_response(
+                [
+                    make_node("issue_unknown_user", ["unknown"]),
+                    make_node("issue_unlabeled_user", []),
+                ],
+            )
+        if "pullRequests(" in query_str:
+            return make_pr_response(
+                [
+                    make_node("pr_unknown_user", ["unknown"]),
+                    make_node("pr_unlabeled_user", []),
+                ],
+            )
+        return {}
+
+    monkeypatch.setattr(
+        "gh_service.create_client",
+        lambda token: DummyClient(mock_execute),
+    )
+
+    contribs = fetch_contributions("owner/repo", "dummy_token")
+
+    assert contribs == []

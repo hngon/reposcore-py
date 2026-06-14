@@ -127,12 +127,13 @@ def _add_issue_contribution(
     if not _is_in_date_range(node.createdAt, since, until):
         return
 
-    contribution = _get_contribution(contributions, node.author.login)
     labels = [label.name.lower() for label in node.labels.nodes]
 
     if "documentation" in labels:
+        contribution = _get_contribution(contributions, node.author.login)
         contribution.doc_issue_count += 1
     elif "bug" in labels or "enhancement" in labels:
+        contribution = _get_contribution(contributions, node.author.login)
         contribution.feature_bug_issue_count += 1
 
 
@@ -148,14 +149,16 @@ def _add_pr_contribution(
     if not _is_in_date_range(node.mergedAt, since, until):
         return
 
-    contribution = _get_contribution(contributions, node.author.login)
     labels = [label.name.lower() for label in node.labels.nodes]
 
     if "documentation" in labels:
+        contribution = _get_contribution(contributions, node.author.login)
         contribution.doc_pr_count += 1
     elif "typo" in labels:
+        contribution = _get_contribution(contributions, node.author.login)
         contribution.typo_pr_count += 1
     elif "bug" in labels or "enhancement" in labels:
+        contribution = _get_contribution(contributions, node.author.login)
         contribution.feature_bug_pr_count += 1
 
 
@@ -174,7 +177,11 @@ def _build_issue_alias_query(indexes: list[int]):
         repository_blocks.append(
             f"""
             repo{index}: repository(owner: $owner{index}, name: $name{index}) {{
-                issues(first: $pageSize, after: $after{index}, states: [OPEN, CLOSED]) {{
+                issues(
+                    first: $pageSize,
+                    after: $after{index},
+                    states: [OPEN, CLOSED],
+                ) {{
                     pageInfo {{
                         hasNextPage
                         endCursor
@@ -216,7 +223,11 @@ def _build_pr_alias_query(indexes: list[int]):
         repository_blocks.append(
             f"""
             repo{index}: repository(owner: $owner{index}, name: $name{index}) {{
-                pullRequests(first: $pageSize, after: $after{index}, states: [MERGED]) {{
+                pullRequests(
+                    first: $pageSize,
+                    after: $after{index},
+                    states: [MERGED],
+                ) {{
                     pageInfo {{
                         hasNextPage
                         endCursor
