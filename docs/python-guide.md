@@ -19,9 +19,20 @@ python --version
 패키지 이름, 버전, 필요한 라이브러리 등을 이 파일에서 관리합니다.
 
 ## 의존성 설치
-아래 명령어로 프로젝트 실행에 필요한 의존성을 설치할 수 있습니다.
+테스트와 린터를 실행하려면 `dev` 선택 의존성까지 함께 설치해야 합니다.
+`pytest`, `ruff`는 `pyproject.toml`의 `[project.optional-dependencies]` `dev` 그룹에 정의되어 있습니다.
 ```bash
-pip install -e .
+pip install -e ".[dev]"
+```
+
+## 테스트 실행
+`pytest`로 전체 테스트를 실행할 수 있습니다.
+```bash
+# 전체 테스트 실행
+pytest
+
+# 특정 파일만 실행
+pytest tests/test_calc_score.py
 ```
 
 ## 프로젝트 디렉토리 구성
