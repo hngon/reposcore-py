@@ -43,7 +43,7 @@ reposcore oss2026hnu/reposcore-py oss2026hnu/reposcore-cs
 
 # 두 저장소의 기여를 합산한 전체 점수 출력
 reposcore oss2026hnu/reposcore-py oss2026hnu/reposcore-cs --aggregate
-```​
+```
 
 ## Synopsis
 
