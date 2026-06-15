@@ -19,7 +19,6 @@ from calc_score import (
     calculate_repository_scores,
     calculate_total_scores,
 )
-
 # fetch_open_issue_claims 함수 임포트 추가
 from gh_service import (
     DEFAULT_PAGE_SIZE,
@@ -71,6 +70,19 @@ def split_repository(repository: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
+def _validate_unique_repositories(repos: list[str]) -> None:
+    """입력된 저장소 목록 중 중복된 저장소가 있는지 유효성을 검증합니다."""
+    seen = set()
+    for repo in repos:
+        # 형식 유효성을 먼저 확인한 뒤 중복성 검사를 수행합니다.
+        split_repository(repo)
+        
+        repo_lower = repo.lower()
+        if repo_lower in seen:
+            raise ValueError(f"같은 저장소가 중복 입력되었습니다: {repo}")
+        seen.add(repo_lower)
+
+
 def _format_cache_date(value: date | None) -> str | None:
     return value.isoformat() if value is not None else None
 
@@ -105,7 +117,9 @@ def _is_cache_valid(cached_data, since, until):
         return False
 
     try:
-        generated_datetime = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        generated_datetime = datetime.fromisoformat(
+            generated_at.replace("Z", "+00:00")
+        )
     except ValueError:
         return False
 
@@ -115,7 +129,6 @@ def _is_cache_valid(cached_data, since, until):
         return False
 
     return True
-
 
 def _dump_contributions(
     contributions: list[UserContributionCounts],
@@ -347,6 +360,12 @@ def main(
         print("오류: 저장소를 하나 이상 입력해주세요.", file=sys.stderr)
         raise typer.Exit(1)
 
+    try:
+        _validate_unique_repositories(repos)
+    except ValueError as error:
+        print(f"오류: {error}", file=sys.stderr)
+        raise typer.Exit(1)
+
     resolved_token = token or os.environ.get("GITHUB_TOKEN")
     if not resolved_token:
         typer.echo(
@@ -354,8 +373,7 @@ def main(
         )
         raise typer.Exit(1)
 
-    # --claims 모드 조건 부합 시 점수 계산 흐름으로 진입하지 않고
-    # 선점 현황만 출력 후 즉시 종료합니다.
+    # --claims 모드 조건 부합 시 점수 계산 흐름으로 진입하지 않고 선점 현황만 출력 후 즉시 종료
     if claims:
         claim_keywords = (
             [kw.strip() for kw in keywords.split(",")]
@@ -366,19 +384,19 @@ def main(
         for repo in repos:
             try:
                 open_issues = fetch_open_issue_claims(repo, resolved_token)
-
+                
                 claimed_issues = []
                 unclaimed_issues = []
-
+                
                 for issue in open_issues:
                     matched_kw = None
                     claimant = None
-
+                    
                     comments_nodes = issue.get("comments", {}).get("nodes", [])
                     if comments_nodes:
                         latest_comment = comments_nodes[0]
                         body = latest_comment.get("body", "")
-
+                        
                         # 댓글 본문에서 선점 키워드 감지
                         for kw in claim_keywords:
                             if kw in body:
@@ -389,24 +407,23 @@ def main(
                                     else "알 수 없음"
                                 )
                                 break
-
+                    
                     if matched_kw:
-                        claimed_issues.append(
-                            {
-                                "number": issue["number"],
-                                "title": issue["title"],
-                                "claimant": claimant,
-                                "keyword": matched_kw,
-                            }
-                        )
+                        claimed_issues.append({
+                            "number": issue["number"],
+                            "title": issue["title"],
+                            "claimant": claimant,
+                            "keyword": matched_kw
+                        })
                     else:
-                        unclaimed_issues.append(
-                            {"number": issue["number"], "title": issue["title"]}
-                        )
-
+                        unclaimed_issues.append({
+                            "number": issue["number"],
+                            "title": issue["title"]
+                        })
+                
                 if len(repos) > 1:
                     print(f"=== Repository: {repo} ===")
-
+                
                 # 요구사항 레이아웃 명세대로 분리 출력
                 print("Claimed Issues\n")
                 for ci in claimed_issues:
@@ -415,14 +432,14 @@ def main(
                     print(f"  Matched keyword: {ci['keyword']}")
                 if not claimed_issues:
                     print("(선점된 이슈가 없습니다.)\n")
-
+                
                 print("\nUnclaimed Issues\n")
                 for ui in unclaimed_issues:
                     print(f"- #{ui['number']} {ui['title']}")
                 if not unclaimed_issues:
                     print("(미선점된 이슈가 없습니다.)\n")
                 print()
-
+                
             except Exception as error:
                 print(f"오류 ({repo}): {error}", file=sys.stderr)
                 raise typer.Exit(1) from error
