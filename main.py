@@ -17,8 +17,29 @@ from calc_score import (
     calculate_repository_scores,
     calculate_total_scores,
 )
-from gh_service import fetch_contributions, fetch_multiple_contributions
+from gh_service import (
+    fetch_contributions,
+    fetch_multiple_contributions,
+    fetch_open_issue_claims,
+)
 from output_writer import build_output, write_output
+
+DEFAULT_CLAIM_KEYWORDS = [
+    "제가 하겠습니다",
+    "제가하겠습니다",
+    "내가 하겠습니다",
+    "내가하겠습니다",
+    "진행하겠습니다",
+    "진행 하겠습니다",
+    "할게요",
+    "하겠습니다",
+    "I'll do this",
+    "I will do this",
+    "I'll take this",
+    "I will take this",
+    "Assign to me",
+    "assign to me",
+]
 
 app = typer.Typer(help="reposcore-py CLI")
 
@@ -214,6 +235,22 @@ def main(
             ),
         ),
     ] = None,
+    claims: Annotated[
+        bool,
+        typer.Option(
+            "--claims",
+            help="열린 이슈의 선점 현황을 출력합니다. 점수 계산은 실행하지 않습니다.",
+        ),
+    ] = False,
+    keywords: Annotated[
+        str | None,
+        typer.Option(
+            "--keywords",
+            help=(
+                "선점 키워드를 쉼표로 구분하여 지정합니다. 예: '제가 하겠습니다,할게요'"
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Fetch basic repository counts from GitHub GraphQL API."""
 
@@ -227,6 +264,115 @@ def main(
             "오류: GITHUB_TOKEN 환경 변수 또는 --token 옵션이 필요합니다.", err=True
         )
         raise typer.Exit(1)
+
+    # --claims 모드: 점수 계산 없이 선점 현황만 출력 후 종료
+    if claims:
+        claim_keywords = (
+            [kw.strip() for kw in keywords.split(",")]
+            if keywords
+            else DEFAULT_CLAIM_KEYWORDS
+        )
+
+        for repo in repos:
+            try:
+                open_issues = fetch_open_issue_claims(repo, resolved_token)
+
+                claimed_issues = []
+                unclaimed_issues = []
+
+                for issue in open_issues:
+                    # issue 작성자 추출
+                    issue_author = (
+                        issue.get("author", {}).get("login")
+                        if issue.get("author")
+                        else "알 수 없음"
+                    )
+
+                    # issue 라벨 목록 추출
+                    labels = [
+                        label.get("name")
+                        for label in issue.get("labels", {}).get("nodes", [])
+                        if label.get("name")
+                    ]
+
+                    matched_kw = None
+                    claimant = None
+
+                    comments_nodes = issue.get("comments", {}).get("nodes", [])
+                    if comments_nodes:
+                        latest_comment = comments_nodes[0]
+                        body = latest_comment.get("body", "")
+
+                        for kw in claim_keywords:
+                            if kw in body:
+                                matched_kw = kw
+                                claimant = (
+                                    latest_comment.get("author", {}).get("login")
+                                    if latest_comment.get("author")
+                                    else "알 수 없음"
+                                )
+                                break
+
+                    if matched_kw:
+                        claimed_issues.append(
+                            {
+                                "number": issue["number"],
+                                "title": issue["title"],
+                                "author": issue_author,
+                                "labels": labels,
+                                "claimant": claimant,
+                                "keyword": matched_kw,
+                            }
+                        )
+                    else:
+                        unclaimed_issues.append(
+                            {
+                                "number": issue["number"],
+                                "title": issue["title"],
+                                "author": issue_author,
+                                "labels": labels,
+                            }
+                        )
+
+                if len(repos) > 1:
+                    print(f"=== Repository: {repo} ===")
+                    print()
+
+                claimed_count = len(claimed_issues)
+                unclaimed_count = len(unclaimed_issues)
+                total_count = claimed_count + unclaimed_count
+
+                print("Claim Summary\n")
+                print(f"Total open issues: {total_count}")
+                print(f"Claimed issues: {claimed_count}")
+                print(f"Unclaimed issues: {unclaimed_count}")
+                print()
+
+                print("Claimed Issues\n")
+                for ci in claimed_issues:
+                    labels_str = ", ".join(ci["labels"]) if ci["labels"] else "없음"
+                    print(f"- #{ci['number']} {ci['title']}")
+                    print(f"  Author: {ci['author']}")
+                    print(f"  Labels: {labels_str}")
+                    print(f"  Claimed by: {ci['claimant']}")
+                    print(f"  Matched keyword: {ci['keyword']}")
+                if not claimed_issues:
+                    print("(선점된 이슈가 없습니다.)\n")
+
+                print("\nUnclaimed Issues\n")
+                for ui in unclaimed_issues:
+                    labels_str = ", ".join(ui["labels"]) if ui["labels"] else "없음"
+                    print(f"- #{ui['number']} {ui['title']}")
+                    print(f"  Author: {ui['author']}")
+                    print(f"  Labels: {labels_str}")
+                if not unclaimed_issues:
+                    print("(미선점된 이슈가 없습니다.)\n")
+                print()
+
+            except Exception as error:
+                print(f"오류 ({repo}): {error}", file=sys.stderr)
+                raise typer.Exit(1) from error
+        raise typer.Exit(0)
 
     parsed_since: date | None = None
     parsed_until: date | None = None
@@ -339,4 +485,3 @@ def cli() -> None:
 
 if __name__ == "__main__":
     cli()
-    
