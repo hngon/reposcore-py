@@ -17,7 +17,9 @@ from calc_score import (
     calculate_repository_scores,
     calculate_total_scores,
 )
+# RepositoryAccessError 임포트 추가
 from gh_service import (
+    RepositoryAccessError,
     fetch_contributions,
     fetch_multiple_contributions,
     fetch_open_issue_claims,
@@ -64,9 +66,23 @@ def split_repository(repository: str) -> tuple[str, str]:
     parts = repository.split("/")
 
     if len(parts) != 2 or not parts[0] or not parts[1]:
-        raise ValueError("저장소는 owner/repo 형식이어야 합니다.")
+        raise ValueError(
+            f"저장소 형식이 올바르지 않습니다: '{repository}' "
+            "— owner/repo 형식으로 입력하세요."
+        )
 
     return parts[0], parts[1]
+
+
+def _validate_unique_repositories(repos: list[str]) -> None:
+    """입력된 저장소 목록 중 중복된 저장소가 있는지 유효성을 검증합니다."""
+    seen = set()
+    for repo in repos:
+        split_repository(repo)
+        repo_lower = repo.lower()
+        if repo_lower in seen:
+            raise ValueError(f"같은 저장소가 중복 입력되었습니다: {repo}")
+        seen.add(repo_lower)
 
 
 def _dump_contributions(
@@ -258,6 +274,13 @@ def main(
         print("오류: 저장소를 하나 이상 입력해주세요.", file=sys.stderr)
         raise typer.Exit(1)
 
+    # 중복 저장소 입력 검증 단계를 토큰 확인 및 API 진입 전 최상단에 배치
+    try:
+        _validate_unique_repositories(repos)
+    except ValueError as error:
+        print(f"오류: {error}", file=sys.stderr)
+        raise typer.Exit(1)
+
     resolved_token = token or os.environ.get("GITHUB_TOKEN")
     if not resolved_token:
         typer.echo(
@@ -420,6 +443,16 @@ def main(
     except ValueError as error:
         print(f"오류: {error}", file=sys.stderr)
         raise typer.Exit(1) from error
+
+    # gh_service가 던지는 실제 미발견 저장소 추적 예외 분기 추가
+    except RepositoryAccessError as error:
+        repos_str = ", ".join(error.failed_repositories)
+        print(
+            "오류: 다음 저장소를 찾을 수 없거나 접근할 수 없습니다"
+            f"(오타·권한 확인): {repos_str}",
+            file=sys.stderr,
+        )
+        raise typer.Exit(3) from error
 
     except TransportQueryError as error:
         print(
